@@ -121,8 +121,3 @@ class Beta4(IRTModel):
 
     def extract_difficulty(self, samples) -> np.ndarray:
         return np.asarray(samples["delta"])
-
-    def item_extra(self, samples, data: dict) -> dict:
-        omega = np.asarray(samples["omega"]).mean(0)
-        tau = np.asarray(data["tau_fixed"])
-        return {"omega": omega, "tau": tau, "a": tau * omega}
