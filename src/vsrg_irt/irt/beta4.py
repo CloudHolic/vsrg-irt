@@ -53,7 +53,7 @@ def compute_fixed_tau(data: dict) -> np.ndarray:
     denom = np.sqrt(vx * vy)
 
     tau = np.where(denom > 1e-8, cov / np.maximum(denom, 1e-12), 1.0)
-    tau = np.wehre(n >= 2, tau, 1.0)
+    tau = np.where(n >= 2, tau, 1.0)
 
     return np.clip(np.nan_to_num(tau, nan=1.0), -0.999, 0.999)
 
@@ -93,7 +93,8 @@ class Beta4(IRTModel):
     def model(self, data: dict, cfg):
         P, I = data["n_persons"], data["n_items"]
         p_idx, i_idx, y = data["person_idx"], data["item_idx"], data["response"]
-        eps = getattr(cfg, "squeeze_eps", 1e-4)     # fixed sign in (-1, 1), per item
+        eps = getattr(cfg, "squeeze_eps", 1e-4)
+        tau = jnp.asarray(data["tau_fixed"])        # fixed sign in (-1, 1), per item
 
         with numpyro.plate("persons", P):
             theta = numpyro.sample("theta", dist.Beta(1.0, 1.0))

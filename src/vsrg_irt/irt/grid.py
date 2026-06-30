@@ -46,7 +46,7 @@ def run_cell(cfg: FitConfig, *, with_persons: bool=True, progress: bool=False) -
         print(f"[{_label(cfg)}] no cached data - SKIP ({e})", flush=True)
         return None
 
-    model = get_model(cfg)
+    model = get_model(cfg.model)
     data = model.make_data(dataset)
     print(f"[{_label(cfg)}] persons={dataset.n_persons} items={dataset.n_items} "
           f"obs={dataset.n_obs}", flush=True)
