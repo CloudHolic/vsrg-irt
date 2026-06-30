@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from typing import Iterable, Iterator, Optional
 
+from ..cpu import configure_cpu
 from ..specs import DataSpec, FitConfig
 
 
