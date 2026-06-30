@@ -34,5 +34,5 @@ def valid_combos(responses=("score", "acc")) -> set[tuple[str, str]]:
         (m.name, r)
         for m in _REGISTRY.values()
         for r in responses
-        if r in m.valid_responses
+        if r in m.valid_response
     }
