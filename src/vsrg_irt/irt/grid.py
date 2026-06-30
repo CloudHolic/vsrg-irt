@@ -88,7 +88,7 @@ def run_grid(key=4, *, jobs=1, with_persons=True, threads_per_worker=1, **cfg_kw
         return results
 
     with ProcessPoolExecutor(max_workers=jobs, initializer=configure_cpu, initargs=(threads_per_worker,)) as ex:
-        futs = {ex.submit(run_ceil, c, with_persons=with_persons, progress=False): c
+        futs = {ex.submit(run_cell, c, with_persons=with_persons, progress=False): c
                 for c in cfgs}
 
         for fut in as_completed(futs):
