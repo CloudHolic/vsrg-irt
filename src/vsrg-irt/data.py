@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 import jax.numpy as jnp
 import numpy as np
-import pandas as pd
+import polars as pl
 
 from . import config
 from .db import load_response
@@ -21,8 +21,8 @@ class Dataset:
     n_persons: int
     n_items: int
     n_obs: int
-    items: pd.DataFrame         # columns:  beatmap_id, rate_group  (row order = item code)
-    users: pd.DataFrame         # column:   user_id                 (row order = person code)
+    items: pl.DataFrame         # columns:  beatmap_id, rate_group  (row order = item code)
+    users: pl.DataFrame         # column:   user_id                 (row order = person code)
 
     def as_model_dict(self) -> dict:
         return {
@@ -35,32 +35,33 @@ class Dataset:
         }
 
 
-def prepare(df: pd.DataFrame, spec: DataSpec) -> Dataset:
-    df = df.copy()
-    df["item"] = list(zip(df["beatmap_id"], df["rate_group"]))
-
+def prepare(df: pl.DataFrame, spec: DataSpec) -> Dataset:
     while True:
-        n0 = len(df)
-        df = df[df["item"].map(df["item"].value_counts()) >= spec.min_item]
-        df = df[df["user_id"].map(df["user_id"].value_counts()) >= spec.min_user]
-        if len(df) == n0:
+        n0 = df.height
+        df = df.filter(
+            (pl.len().over(["beatmap_id", "rate_group"]) >= spec.min_item)
+            & (pl.len().over("user_id") >= spec.min_user)
+        )
+        if df.height == n0:
             break
 
-    if df.empty:
+    if df.height == 0:
         raise ValueError(f"No rows survive the >= filters for {spec.cache_name}")
 
-    user_codes, users = pd.factorize(df["user_id"], sort=True)
-    item_codes, items = pd.factorize(df["item"], sort=True)
+    users = df.select("user_id").unique().sort("user_id").with_row_index("person_idx")
+    items = (df.select(["beatmap_id", "rate_group"]).unique()
+             .sort(["beatmap_id", "rate_group"]).with_row_index("item_idx"))
+    df = df.join(users, on="user_id").join(items, on=["beatmap_id", "rate_group"])
 
     return Dataset(
-        person_idx=np.asarray(user_codes),
-        item_idx=np.asarray(item_codes),
-        response=df["response"].to_numpy(np.float64),
-        n_persons=int(len(users)),
-        n_items=int(len(items)),
-        n_obs=int(len(df)),
-        items=pd.DataFrame(items.tolist(), columns=["beatmap_id", "rate_group"]),
-        users=pd.DataFrame({"user_id": np.asarray(users)})
+        person_idx=df["person_idx"].to_numpy().astype(np.int64),
+        item_idx=df["item_idx"].to_numpy().astype(np.int64),
+        response=df["response"].to_numpy().astype(np.float64),
+        n_persons=int(users.height),
+        n_items=int(items.height),
+        n_obs=int(df.height),
+        items=items.select(["beatmap_id", "rate_group"]),
+        users=users.select("user_id")
     )
 
 
@@ -87,22 +88,22 @@ def _load(spec: DataSpec) -> Dataset:
     return Dataset(
         person_idx=z["person_idx"], item_idx=z["item_idx"], response=z["response"],
         n_persons=int(z["n_persons"]), n_items=int(z["n_items"]), n_obs=int(z["n_obs"]),
-        items=pd.DataFrame({"beatmap_id": z["item_beatmap_id"], "rate_group": z["item_rate_group"]}),
-        users=pd.DataFrame({"user_id": z["user_id"]})
+        items=pl.DataFrame({"beatmap_id": z["item_beatmap_id"], "rate_group": z["item_rate_group"]}),
+        users=pl.DataFrame({"user_id": z["user_id"]})
     )
 
 
-def load_dataset(spec: DataSpec, *, conn=None, refresh: bool=False) -> Dataset:
+def load_dataset(spec: DataSpec, *, refresh: bool=False, allow_db: bool=True) -> Dataset:
     """Prepared Dataset for a spec, from cache when available."""
     if not refresh and _cache_path(spec).exists():
         return _load(spec)
 
-    if conn is None:
+    if not allow_db:
         raise FileNotFoundError(
             f"no cached data for {spec.cache_name} and no connection given; "
-            f"warm the cache first (load_dataset(spec, conn=...))"
+            f"warm the cache first (load_dataset(spec, allow_db=True))"
         )
 
-    d = prepare(load_response(conn, spec), spec)
+    d = prepare(load_response(spec), spec)
     _save(spec, d)
     return d

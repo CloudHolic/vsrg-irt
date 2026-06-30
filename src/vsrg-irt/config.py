@@ -4,17 +4,11 @@ import os
 from pathlib import Path
 
 # DB ---------------------------------------------------------------------------
+
 DSN: str = os.environ.get(
     "DSN",
     "postgresql://thesis:thesis@homeserver.tail26c9db.ts.net:5432/thesis"
 )
-
-# SQLAlchemy form: prefixes "psycopg2"
-def sqlalchemy_dsn() -> str:
-    if DSN.startswith("postgres+"):
-        return DSN
-    return DSN.replace("postgresql://", "postgresql+psycopg2://", 1)
-
 
 # Paths ------------------------------------------------------------------------
 

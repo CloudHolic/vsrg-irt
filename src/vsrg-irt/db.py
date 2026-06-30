@@ -1,19 +1,15 @@
 from __future__ import annotations
 
-import pandas as pd
-import psycopg2
+import polars as pl
 
 from . import config
 from .specs import DataSpec
 
 
-def connect(dsn: str | None = None):
-    return psycopg2.connect(dsn or config.DSN)
-
-
-def load_response(conn, spec: DataSpec) -> pd.DataFrame:
+def load_response(spec: DataSpec) -> pl.DataFrame:
     """Raw (user_id, beatmap_id, rate_group, response) rows for one DataSpec."""
-    where = ["mania_keys = %(key)s"]
+    where = ["mania_keys = " + str(int(spec.key))]
+
     if spec.sample == "random":
         where.append("in_random")
 
@@ -22,10 +18,4 @@ def load_response(conn, spec: DataSpec) -> pd.DataFrame:
         f"FROM {config.VIEWS[spec.response]} WHERE {' AND '.join(where)}"
     )
 
-    cur = conn.cursor()
-    try:
-        cur.execute(sql, {"key": spec.key})
-        cols = [d[0] for d in cur.description]
-        return pd.DataFrame(cur.fetchall(), columns=cols)
-    finally:
-        cur.close()
+    return pl.read_database_uri(sql, config.DSN, engine="connectorx")
