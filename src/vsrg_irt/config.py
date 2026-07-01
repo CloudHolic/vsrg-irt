@@ -36,7 +36,7 @@ DATA_TAG: str = os.environ.get("THESIS_DATA_TAG", "2026H1")
 
 # Domain defaults --------------------------------------------------------------
 
-RATE_GROUP_CLOCK: dist[str, float] = {"NM": 1.0, "DT": 1.5, "HT": 0.75}
+RATE_GROUP_CLOCK: dict[str, float] = {"NM": 1.0, "DT": 1.5, "HT": 0.75}
 VIEWS: dict[str, str] = {"score": "v_irt_score", "acc": "v_irt_acc"}
 MANIA_KEYS: tuple[int, ...] = tuple(range(1, 19))
 

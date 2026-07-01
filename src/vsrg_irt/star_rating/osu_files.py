@@ -13,6 +13,7 @@ from typing import Iterable
 from .. import config
 
 
+_BOM = b"\xef\xbb\xbf"
 _HEADER = b"osu file format"
 
 
@@ -64,7 +65,7 @@ def _try_mirror(url: str, timeout: float) -> bytes:
     with urllib.request.urlopen(req, timeout=timeout) as f:
         body = f.read()
 
-    if not body.lstrip().startswith(_HEADER):
+    if not body.removeprefix(_BOM).lstrip().startswith(_HEADER):
         raise OsuFetchError("response is not a .osu file (error/placeholder page)")
 
     return body
