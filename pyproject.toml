@@ -11,13 +11,10 @@ dependencies = [
     "polars>=1.42.1",
     "psycopg2-binary>=2.9.12",
     "pyarrow>=24.0.0",
+    "scikit-learn>=1.9.0",
     "scipy>=1.18.0",
+    "scipy-stubs>=1.18.0.0",
     "seaborn>=0.13.2",
-]
-
-[project.optional-dependencies]
-dev = [
- "scipy-stubs~=1.18.0",
 ]
 
 [build-system]
