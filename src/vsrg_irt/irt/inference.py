@@ -63,7 +63,7 @@ def person_intervals(model: IRTModel, guide, params, dataset: Dataset,
     out = dataset.users.with_columns(
         pl.Series("n_resp", np.bincount(dataset.person_idx, minlength=dataset.n_persons)),
         pl.Series("theta_mean", mean),
-        pl.Series("theta_sd", sd),
+        pl.Series("theta_std", sd),
         pl.Series("theta_lo", lo),
         pl.Series("theta_hi", hi)
     )
