@@ -397,7 +397,7 @@ def _theta_table(cells, model, resp):
     if not _has(p, C_USER, C_THETA_MEAN):
         return None
 
-    keep = [C_USER, C_THETA_MEAN] + ([C_NRESP] if C_NRESP in p.columns else [])
+    keep = [C_USER, C_THETA_MEAN] + ([C_N_RESP] if C_N_RESP in p.columns else [])
     return p.select(keep).rename({C_USER: "user_id", C_THETA_MEAN: "theta"})
 
 
@@ -458,11 +458,11 @@ def fig_label_quality(cells, interval_scale):
 
     for (model, resp) in [("zoi", "score"), ("zoi", "acc"), ("beta3", "score"), ("beta4", "score")]:
         it = items_of(cells, model, resp, "all")
-        if not _has(it, C_DIFF_MEAN, C_DIFF_SD, C_NRESP):
+        if not _has(it, C_DIFF_MEAN, C_DIFF_SD, C_N_RESP):
             continue
 
         _, sd = _diff_link(model, _np(it, C_DIFF_MEAN), _np(it, C_DIFF_SD))
-        n = _np(it, C_NRESP)
+        n = _np(it, C_N_RESP)
 
         med = np.nanmedian(sd)
         if not np.isfinite(med) or med == 0:
@@ -496,7 +496,7 @@ BUILDERS = [
     ("calibration_difficulty_vs_starrating", lambda c, s, a: fig_calibration(c, s)),
     ("standardized_residual_vs_starrating",  lambda c, s, a: fig_residual(c, s)),
     ("mnar_difficulty_random_vs_all",        lambda c, s, a: fig_mnar(c, s)),
-    ("crossset_theta_agreement",             lambda c, s, a: fig_crossset(c, s)),
+    ("crossset_theta_agreement",             lambda c, s, a: fig_cross_set(c, s)),
     ("weaklabel_width_vs_response_count",    lambda c, s, a: fig_label_quality(c, a.interval_scale)),
 ]
 
