@@ -267,7 +267,8 @@ def _calib_series(ax, it, model, resp, summary):
 def fig_calibration(cells, summary):
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.4))
     ax = axes[0]
-    drew = any(_calib_series(ax, items_of(cells, "zoi", r, "all"), "zoi", r, summary) for r in RESPS)
+    drew = any([_calib_series(ax, items_of(cells, "zoi", r, "all"), "zoi", r, summary)
+                for r in RESPS])
 
     ax.set_title("ZOI difficulty (theta*) vs star rating")
     ax.set_xlabel("star rating"); ax.set_ylabel("theta*  (N(0,1) scale)")
@@ -275,8 +276,8 @@ def fig_calibration(cells, summary):
                                                      ha="center", transform=ax.transAxes)
     ax = axes[1]
 
-    drew = any(_calib_series(ax, items_of(cells, m, "score", "all"), m, "score", summary)
-               for m in UNIT_MODELS)
+    drew = any([_calib_series(ax, items_of(cells, m, "score", "all"), m, "score", summary)
+               for m in UNIT_MODELS])
     ax.set_title("beta3 vs beta4 difficulty (logit delta) vs star rating")
     ax.set_xlabel("star rating"); ax.set_ylabel("logit delta  ((0,1) scale)")
     ax.legend(loc="upper left") if drew else ax.text(0.5, 0.5, "no beta3/beta4 score items",
@@ -363,7 +364,8 @@ def fig_mnar(cells, summary):
     fig, axes = plt.subplots(1, 2, figsize=(13, 5.6))
     ax = axes[0]
 
-    drew = any(_mnar_series(ax, cells, "zoi", r, summary, "+.2f") for r in RESPS)
+    drew = any([_mnar_series(ax, cells, "zoi", r, summary, "+.2f")
+                for r in RESPS])
     if drew:
         lo = min(ax.get_xlim()[0], ax.get_ylim()[0]); hi = max(ax.get_xlim()[1], ax.get_ylim()[1])
         ax.plot([lo, hi], [lo, hi], color="k", ls="--", lw=1, label="identity")
@@ -375,7 +377,8 @@ def fig_mnar(cells, summary):
     ax.set_xlabel("theta*  (random fit)"); ax.set_ylabel("theta*  (all fit)")
     ax = axes[1]
 
-    drew = any(_mnar_series(ax, cells, m, "score", summary, "+.3f") for m in UNIT_MODELS)
+    drew = any([_mnar_series(ax, cells, m, "score", summary, "+.3f")
+                for m in UNIT_MODELS])
     if drew:
         ax.plot([0, 1], [0, 1], color="k", ls="--", lw=1, label="identity")
         ax.legend(loc="upper left")
