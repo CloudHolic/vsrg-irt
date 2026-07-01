@@ -69,7 +69,8 @@ def main() -> None:
             sr_fn = make_sr_fn(bids)
 
         for (model, response, sample), r in sorted(results.items()):
-            items = attach(r["items"], sr_fn) if sr_fn is not None else r["items"]
+            items = (attach(r["items"], sr_fn) if sr_fn is not None
+                     else r["items"].with_columns(pl.lit(None, dtype=pl.Float64).alias("star_rating")))
             stem = f"{key}Keys_{model}_{response}_{sample}"
             items.write_csv(config.RESULT_DIR / f"{stem}_items.csv")
             if "persons" in r:
