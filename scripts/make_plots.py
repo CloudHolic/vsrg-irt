@@ -23,6 +23,7 @@ from dataclasses import dataclass
 import numpy as np
 import polars as pl
 from scipy.stats import spearmanr
+from scipy.interpolate import PchipInterpolator
 from sklearn.isotonic import IsotonicRegression
 import matplotlib
 
@@ -149,6 +150,52 @@ def _isotonic(x, y, w=None):
         return g
 
 
+def _w_median(v, w):
+    o = np.argsort(v)
+    v, w = v[o], w[o]
+    c = np.cumsum(w)
+    return float(v[np.searchsorted(c, 0.5 * c[-1])])
+
+
+def _monotone_smooth(x, y, w=None, n_knots=18):
+    """Weighted, smooth, monotone-increasing link g(x)."""
+    x = np.asarray(x, float)
+    y = np.asarray(y, float)
+    w = np.ones_like(x) if w is None else np.asarray(w, float)
+    g = np.full_like(y, np.nan)
+
+    m = np.isfinite(x) & np.isfinite(y) & np.isfinite(w) & (w > 0)
+    if m.sum() < 5:
+        return g
+
+    xm, ym, wm = x[m], y[m], w[m]
+
+    k = int(np.clip(m.sum() // 8, 3, n_knots))
+    edges = np.unique(np.quantile(xm, np.linspace(0, 1, k + 1)))
+    if edges.size < 3:
+        g[m] = _isotonic(xm, ym, wm)
+        return g
+
+    xk, yk = [], []
+    for i in range(edges.size - 1):
+        lo, hi = edges[i], edges[i + 1]
+        sel = (xm >= lo) & (xm <= hi) if i == edges.size - 2 else (xm >= lo) & (xm < hi)
+        if sel.any():
+            xk.append(np.average(xm[sel], weights=wm[sel]))
+            yk.append(_w_median(ym[sel], wm[sel]))
+
+    xk = np.asarray(xk, float)
+    yk = np.maximum.accumulate(np.asarray(yk, float))
+    keep = np.concatenate(([True], np.diff(xk) > 0))
+    xk, yk = xk[keep], yk[keep]
+    if xk.size < 2:
+        g[m] = yk[-1] if yk.size else np.nan
+        return g
+
+    g[m] = PchipInterpolator(xk, yk, extrapolate=True)(xm)
+    return g
+
+
 def _inv_var_w(sd):
     sd = np.asarray(sd, float)
     med = np.median(sd[np.isfinite(sd) & (sd > 0)]) if np.isfinite(sd).any() else 1.0
@@ -182,9 +229,38 @@ def _diff_link(model, mean, sd):
     return mean, sd
 
 
+DENSITY_MAX_POINTS = 6000
+_RNG = np.random.default_rng(0)
+
+def _draw(ax, x, y, *, c, marker, label=None, cmap=None):
+    x = np.asarray(x, float)
+    y = np.asarray(y, float)
+    m = np.isfinite(x) & np.isfinite(y)
+
+    if isinstance(c, np.ndarray):
+        m &= np.isfinite(c)
+
+    n = int(m.sum())
+    if n == 0:
+        return None
+
+    xi, yi = x[m], y[m]
+    ci = c[m] if isinstance(c, np.ndarray) else c
+    if n > DENSITY_MAX_POINTS:
+        idx = _RNG.choice(n, DENSITY_MAX_POINTS, replace=False)
+        xi, yi = xi[idx], yi[idx]
+        ci = ci[idx] if isinstance(ci, np.ndarray) else ci
+
+    alpha = 0.5 if n < 1500 else 0.25 if n < 10000 else 0.12
+    s = 16 if n < 1500 else 10 if n < 10000 else 6
+
+    return ax.scatter(xi, yi, s=s, c=ci, marker=marker, alpha=alpha, label=label, cmap=cmap,
+                      rasterized=True, linewidths=0, edgecolors="none")
+
+
 # Loading
 MODELS = ["zoi", "beta3", "beta4"]
-RESPS = ["score", "acc"]
+RESPS = ["acc", "score"]
 SAMPLES = ["random", "all"]
 VALID = {("zoi", "score"), ("zoi", "acc"), ("beta3", "score"), ("beta4", "score")}
 UNIT_MODELS = ["beta3", "beta4"]
@@ -253,9 +329,8 @@ def _calib_series(ax, it, model, resp, summary):
     st = SERIES_STYLE[(model, resp)]
     rho = _spearman(sr, ym)
 
-    ax.scatter(sr, ym, s=16, c=st["c"], marker=st["marker"], alpha=0.5,
-               label=f"{st['label']} (Spearman={rho:.2f})")
-    g = _isotonic(sr, ym, _inv_var_w(ys) if ys is not None else None)
+    _draw(ax, sr, ym, c=st["c"], marker=st["marker"], label=f"{st['label']} (Spearman={rho:.2f})")
+    g = _monotone_smooth(sr, ym, _inv_var_w(ys) if ys is not None else None)
     o = np.argsort(sr)
 
     ax.plot(sr[o], g[o], color=st["c"], ls=st["ls"], lw=2)
@@ -300,11 +375,11 @@ def fig_residual(cells, summary):
             continue
         sr = _np(it, C_SR)
         ym, ys = _diff_link(model, _np(it, C_DIFF_MEAN), _np(it, C_DIFF_SD))
-        g = _isotonic(sr, ym, _inv_var_w(ys))
+        g = _monotone_smooth(sr, ym, _inv_var_w(ys))
         z = (ym - g) / ys
         st = SERIES_STYLE[(model, resp)]
-        ax.scatter(sr, z, s=16, c=st["c"], marker=st["marker"], alpha=0.55,
-                   label=f"{st['label']}  (|z|>2: {np.nanmean(np.abs(z) > 2)*100:.0f}%)")
+        _draw(ax, sr, z, c=st["c"], marker=st["marker"],
+              label=f"{st['label']}  (|z|>2: {np.nanmean(np.abs(z) > 2)*100:.0f}%)")
         summary[f"residual_{model}_{resp}_outlier_fraction_absz_gt_2"] = float(np.nanmean(np.abs(z) > 2))
         drew = True
 
@@ -350,11 +425,20 @@ def _mnar_series(ax, cells, model, resp, summary, fmt):
 
     v_all = m.get_column("v_all").to_numpy().astype(float)
     v_rnd = m.get_column("v_rnd").to_numpy().astype(float)
+
+    finite = np.isfinite(v_all) & np.isfinite(v_rnd)
+    if finite.sum() < 3:
+        st = SERIES_STYLE[(model, resp)]
+        y0 = 0.02 + 0.05 * list(SERIES_STYLE).index((model, resp))
+        ax.annotate(f"{st['label']}: diverged (omitted)", xy=(0.02, y0),
+                    xycoords="axes fraction", fontsize=8, color=st["c"])
+        return False
+
     shift = float(np.median(v_all - v_rnd))
     st = SERIES_STYLE[(model, resp)]
 
-    ax.scatter(v_rnd, v_all, s=16, c=st["c"], marker=st["marker"], alpha=0.5,
-               label=f"{st['label']}  median shift={shift:{fmt}}")
+    _draw(ax, v_rnd, v_all, c=st["c"], marker=st["marker"],
+          label=f"{st['label']}  median shift={shift:{fmt}}")
     summary[f"mnar_{model}_{resp}_median_shift_all_minus_random"] = shift
 
     return True
@@ -428,11 +512,10 @@ def fig_cross_set(cells, summary):
         rho = _spearman(x, y)
         nc = "n_resp" if "n_resp" in m.columns else None
         px, py = (_rank_data(x), _rank_data(y)) if use_rank else (x, y)
-        sc = ax.scatter(px, py, s=14, alpha=0.55,
-                        c=(np.log10(m.get_column(nc).to_numpy().astype(float) + 1) if nc else "#4C72B0"),
-                        cmap=("viridis" if nc else None))
 
-        if nc:
+        color = np.log10(m.get_column(nc).to_numpy().astype(float) + 1) if nc else "#4C72B0"
+        sc = _draw(ax, px, py, c=color, marker="o", cmap=("viridis" if nc else None))
+        if nc and sc is not None:
             fig.colorbar(sc, ax=ax, label="log10(user response count + 1)")
 
         ax.set_xlabel(x_label); ax.set_ylabel(y_label)
@@ -473,7 +556,7 @@ def fig_label_quality(cells, interval_scale):
 
         y = sd / med
         st = SERIES_STYLE[(model, resp)]
-        ax.scatter(np.log10(n + 1), y, s=14, c=st["c"], marker=st["marker"], alpha=0.45, label=st["label"])
+        _draw(ax, np.log10(n + 1), y, c=st["c"], marker=st["marker"], label=st["label"])
 
         o = np.argsort(n)
         trend = _roll_med(y[o], max(5, len(o) // 10))
